@@ -1,3 +1,8 @@
+"""
+// Copyright (c) 2025 HTTPayer Inc. under ChainSettle Inc. All rights reserved.
+// Licensed under the HTTPayer SDK License – see LICENSE.txt.
+"""
+
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone

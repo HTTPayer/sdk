@@ -1,12 +1,8 @@
 # HTTPayer – Python SDK
 
-**HTTPayer** is a lightweight Python SDK for accessing APIs protected by  
-[`402 Payment Required`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402)  
-responses using the emerging [x402 protocol](https://github.com/x402/spec).
+**HTTPayer** is a lightweight Python SDK for accessing APIs protected by [`402 Payment Required`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402) responses using the emerging [x402 protocol](https://github.com/x402/spec).
 
-It integrates with the **HTTPayer Router** to automatically fulfill off-chain payments
-(e.g. USDC / stablecoins via [EIP-3009](https://eips.ethereum.org/EIPS/eip-3009)),
-enabling pay-per-use APIs and metered endpoints.
+It integrates with the **HTTPayer Router** to automatically fulfill off-chain payments (e.g. USDC / stablecoins via [EIP-3009](https://eips.ethereum.org/EIPS/eip-3009)), enabling pay-per-use APIs and metered endpoints.
 
 ---
 
@@ -42,7 +38,6 @@ Copy `.env.sample` → `.env` and configure your API key and network:
 
 ```env
 HTTPAYER_API_KEY=your-api-key
-X402_ROUTER_URL=https://api.httpayer.com
 ```
 
 For testing the `X402Gate` decorator or local demos:
@@ -66,7 +61,7 @@ from httpayer import HTTPayerClient
 client = HTTPayerClient(response_mode="json")
 
 # auto-handles 402 Payment Required
-resp = client.request("GET", "https://demo.httpayer.com/base-weather")
+resp = client.request("GET", "https://x402.org/protected")
 
 print(resp.status_code)   # 200
 print(resp.json())        # resource data
@@ -76,14 +71,13 @@ print(resp.json())        # resource data
 
 ```python
 # simulate required payment (dry-run)
-sim = client.simulate_invoice("GET", "https://demo.httpayer.com/base-weather")
+sim = client.simulate_invoice("GET", "https://x402.org/protected")
 
 # pay actual invoice via router
-paid = client.pay_invoice("GET", "https://demo.httpayer.com/base-weather")
+paid = client.pay_invoice("GET", "https://x402.org/protected")
 ```
 
-If the router returns `202 Accepted`, the client will automatically poll
-the provided `webhook_url` until completion.
+If the router returns `202 Accepted`, the client will automatically poll the provided `webhook_url` until completion.
 
 ---
 
@@ -164,8 +158,5 @@ tests/
 [httpayer.com](httpayer.com)
 
 ```
-
----
-
 
 ```

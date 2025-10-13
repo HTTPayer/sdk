@@ -1,3 +1,8 @@
+"""
+// Copyright (c) 2025 HTTPayer Inc. under ChainSettle Inc. All rights reserved.
+// Licensed under the HTTPayer SDK License – see LICENSE.txt.
+"""
+
 from flask import Flask, request, jsonify, make_response
 from httpayer.gate import X402Gate
 import os
