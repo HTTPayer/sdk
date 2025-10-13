@@ -157,6 +157,8 @@ tests/
 [general@httpayer.com](mailto:general@httpayer.com)
 [httpayer.com](httpayer.com)
 
-```
+## License
 
-```
+This SDK is proprietary and licensed under the HTTPayer SDK License.  
+Cloning, redistribution, or republishing is strictly prohibited.  
+See the [LICENSE.md](./LICENSE.md) file for details.
