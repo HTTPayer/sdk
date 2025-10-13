@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "httpayer"
+version = "0.2.0"
+description = "Python SDK for HTTPayer"
+readme = "README.md"
+requires-python = ">=3.7"
+license = "MIT"
+
+authors = [
+    { name = "Brandyn Hamilton", email = "brandynham1120@gmail.com"}
+]
+
+dependencies = [
+    "python-dotenv",
+    "requests"
+]
+
+[project.optional-dependencies]
+demo = ["flask", "ccip_terminal", "cachetools>=5.5.2", "pandas", "web3", "python-viem>=0.1.0"] 
+dev = ["build", "twine"]
+
+[tool.setuptools.packages.find]
+include = ["httpayer", "httpayer.*"]
+
+[dependency-groups]
+demo = [
+    "cachetools>=5.5.2",
+    "ccip-terminal>=0.1.3",
+    "flask>=2.2.5",
+    "pandas"
+]
+dev = [
+    "build>=1.1.1",
+    "twine>=4.0.2",
+]
