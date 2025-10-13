@@ -147,16 +147,14 @@ tests/
 
 ---
 
-## License
-
----
-
 ## Author
 
 **HTTPayer Team**
 
 - [general@httpayer.com](mailto:general@httpayer.com)
 - [httpayer.com](httpayer.com)
+
+---
 
 ## License
 
