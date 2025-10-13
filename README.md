@@ -1,6 +1,6 @@
 # HTTPayer – Python SDK
 
-**HTTPayer** is a lightweight Python SDK for accessing APIs protected by [`402 Payment Required`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402) responses using the emerging [x402 protocol](https://github.com/x402/spec).
+**HTTPayer** is a lightweight Python SDK for accessing APIs protected by [`402 Payment Required`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402) responses using the emerging [x402 protocol](https://github.com/coinbase/x402).
 
 It integrates with the **HTTPayer Router** to automatically fulfill off-chain payments (e.g. USDC / stablecoins via [EIP-3009](https://eips.ethereum.org/EIPS/eip-3009)), enabling pay-per-use APIs and metered endpoints.
 
@@ -152,7 +152,7 @@ tests/
 **HTTPayer Team**
 
 - [general@httpayer.com](mailto:general@httpayer.com)
-- [httpayer.com](httpayer.com)
+- [httpayer.com](https://www.httpayer.com/)
 
 ---
 
