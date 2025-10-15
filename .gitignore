@@ -7,3 +7,4 @@ dist/
 build/
 uv
 uv.lock
+**notes.txt

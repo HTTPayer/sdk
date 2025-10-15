@@ -1,6 +1,0 @@
-# Additional dependencies to run test4.py
-uv add --group demo flask ccip_terminal cachetools>=5.5.2 pandas
-
-# httpie call to httpayer to pay test4.py server
-http POST http://localhost:30001/httpayer api_url=http://localhost:50358/weather method=GET x-api-key:chainlinkhack2025
-
