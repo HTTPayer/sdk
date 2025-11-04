@@ -40,8 +40,10 @@ class HTTPayerClient:
         suffix = "?format=json" if self.response_mode == "json" else ""
         self.pay_url = f"{self.base_url}/proxy{suffix}"
         self.sim_url = f"{self.base_url}/sim{suffix}"
+        self.balance_url = f"{self.base_url}/balance"
 
         self.timeout = timeout
+        # print(f"[HTTPayerClient init] Using timeout: {self.timeout} seconds")
         self.session = requests.Session() if use_session else requests
 
         self.api_key = api_key or os.getenv("HTTPAYER_API_KEY")
@@ -91,6 +93,19 @@ class HTTPayerClient:
         """Dry-run simulation call: returns payment requirements without paying."""
         resp = self._call_router(self.sim_url, api_url, api_method, api_payload, api_params, api_headers)
         return resp
+    
+    def get_balance(self, api_key: Optional[str] = None) -> requests.Response:
+        """Get account balance from the router service."""
+
+        """
+        Args:
+            api_key (Optional[str]): API key to use for the request. If None, uses the client's default API key.
+
+        Returns:
+            requests.Response: The HTTP response from the balance request.
+        """
+        header = {"x-api-key": api_key or self.api_key}
+        return self.session.get(self.balance_url, headers=header)
 
     # -------------------------------
     # Unified request interface
@@ -115,6 +130,7 @@ class HTTPayerClient:
 
         """
         effective_timeout = kwargs.pop("timeout", self.timeout)
+        # print(f"[HTTPayerClient request] Making {method} request to {url} with timeout {effective_timeout}s")
 
         # First try direct
         resp = self.session.request(method, url, timeout=effective_timeout, **kwargs)
@@ -132,7 +148,7 @@ class HTTPayerClient:
             if active_mode == "json" and "format=json" not in endpoint:
                 endpoint = f"{endpoint}?format=json"
 
-            resp = self._call_router(endpoint, url, method, api_payload, api_params, api_headers)
+            resp = self._call_router(endpoint, url, method, api_payload, api_params, api_headers, effective_timeout)
 
         return resp
 
@@ -148,12 +164,14 @@ class HTTPayerClient:
         api_payload: Optional[Dict[str, Any]] = None,
         api_params: Optional[Dict[str, Any]] = None,
         api_headers: Optional[Dict[str, str]] = None,
+        effective_timeout: Optional[int] = None,
     ) -> requests.Response:
         """Helper to POST to /pay or /sim with proper auth + body."""
         data = {
             "api_url": api_url,
             "method": api_method,
             "payload": api_payload or {},
+            "timeout": effective_timeout,
         }
         if api_params:
             data["params"] = api_params
@@ -161,7 +179,10 @@ class HTTPayerClient:
             data["headers"] = api_headers
 
         header = {"x-api-key": self.api_key, "Content-Type": "application/json"}
-        resp = self.session.post(endpoint, headers=header, json=data, timeout=self.timeout)
+
+        # print(f"[HTTPayerClient _call_router] timeout: {effective_timeout}")
+
+        resp = self.session.post(endpoint, headers=header, json=data, timeout=effective_timeout)
         
         if resp.status_code == 202:
             webhook = resp.json().get("webhook_url")
@@ -175,18 +196,34 @@ class HTTPayerClient:
         start = time.time()
         while True:
             poll = self.session.get(url, timeout=self.timeout)
-            if poll.status_code == 200:
-                print(f"[httpayer] async task complete in {time.time() - start:.1f}s")
+            code = poll.status_code
+
+            if code == 200:
+                print(f"[HTTPayerClient] async task complete in {time.time() - start:.1f}s")
                 return poll
-            elif poll.status_code == 202:
-                if time.time() - start > self.timeout:
-                    raise TimeoutError(f"Webhook polling exceeded {self.timeout}s")
+
+            elif code == 202:
+                # Still pending — keep polling until timeout
+                elapsed = time.time() - start
+                if elapsed > self.timeout:
+                    raise TimeoutError(f"[HTTPayerClient] Webhook polling exceeded {self.timeout}s")
                 time.sleep(3)
-            elif poll.status_code == 500:
+                continue
+
+            elif code == 500:
+                # Server says async task failed
                 try:
                     err = poll.json().get("error", poll.text)
                 except Exception:
                     err = poll.text
-                raise RuntimeError(f"Async task failed: {err}")
+                raise RuntimeError(f"[HTTPayerClient] Async task failed: {err}")
+
             else:
-                raise RuntimeError(f"Unexpected async poll status: {poll.status_code}")
+                # Any other status (404, 4xx, etc.) — break early instead of waiting full timeout
+                try:
+                    body = poll.text
+                except Exception:
+                    body = "<no body>"
+                raise RuntimeError(
+                    f"[HTTPayerClient] Async task returned unexpected status {code}: {body[:200]}"
+                )
