@@ -25,11 +25,11 @@ def main(urls):
         client = HTTPayerClient()
 
         # We can simulate calling the endpoint to get payment instructions w/ simulate=True
-        response = client.request("POST", url, simulate=True)
+        response = client.request("GET", url, simulate=True)
         print("simulated response:", response.json())
 
         # Now we can pay the invoice and get the actual resource
-        response = client.request("POST", url)
+        response = client.request("GET", url)
 
         print(f'response headers: {response.headers}')  # contains the x-payment-response header
         print(f'response status code: {response.status_code}')  # should be 200 OK
@@ -45,5 +45,5 @@ def main(urls):
 
 if __name__ == "__main__":
     print(f'starting test1...')
-    urls = ["https://nickeljoke.vercel.app/api/joke"]
+    urls = ["http://localhost:40211/weather", "https://www.x402.org/protected"]
     main(urls)
