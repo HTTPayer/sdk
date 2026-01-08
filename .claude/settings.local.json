@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebSearch",
+      "WebFetch(domain:docs.chain.link)",
+      "WebFetch(domain:blog.chain.link)",
+      "WebFetch(domain:developers.circle.com)"
+    ]
+  }
+}
