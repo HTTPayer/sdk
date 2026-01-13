@@ -14,7 +14,7 @@ from typing import Optional, Dict, Any, Literal
 from dotenv import load_dotenv
 from eth_account import Account
 from web3 import Web3
-from x402.clients.requests import x402_requests
+from httpayer._vendor.x402.clients.requests import x402_requests
 
 from httpayer.constants import SUPPORTED_NETWORKS
 
@@ -54,6 +54,39 @@ class HTTPayerClient:
         response_mode: str = "text",
         privacy_mode: bool = True,
     ):
+        """
+        Initialize HTTPayer client with automatic mode detection.
+
+        Mode is auto-detected based on credentials:
+        - "relay" mode: When private_key or account is provided (self-custodial)
+        - "proxy" mode: When only api_key is provided (custodial)
+
+        Args:
+            router_url: HTTPayer router URL. Defaults to https://api.httpayer.com or X402_ROUTER_URL env var.
+            api_key: API key for proxy mode. Defaults to HTTPAYER_API_KEY env var.
+            private_key: Private key for relay mode. Supports EVM (hex), Solana (base58/hex/JSON array).
+            account: Pre-configured EVM Account object for relay mode.
+            network: Default network for relay payments (e.g., "base", "solana-mainnet-beta").
+            timeout: Request timeout in seconds. Defaults to 600 (10 minutes).
+            use_session: Use requests.Session for connection pooling. Defaults to True.
+            strict_networks: Raise error for unsupported networks. Defaults to True.
+            response_mode: Response format - "text" (unwrapped) or "json" (wrapped). Defaults to "text".
+            privacy_mode: Route through HTTPayer relay for privacy. When False, attempts direct x402 payment. Defaults to True.
+
+        Raises:
+            ValueError: If response_mode is invalid, private_key format is invalid, or network is incompatible with wallet type.
+            ValueError: If proxy mode is detected but HTTPAYER_API_KEY is missing.
+
+        Examples:
+            >>> # Proxy mode (API key)
+            >>> client = HTTPayerClient(api_key="your-api-key")
+
+            >>> # Relay mode (EVM private key)
+            >>> client = HTTPayerClient(private_key="0x...", network="base")
+
+            >>> # Relay mode (Solana private key)
+            >>> client = HTTPayerClient(private_key="base58-key", network="solana-mainnet-beta")
+        """
         if response_mode not in ("json", "text"):
             raise ValueError("response_mode must be 'json' or 'text'")
 
@@ -87,7 +120,6 @@ class HTTPayerClient:
             self.network_type = "evm"
             self.mode = "relay"
         elif private_key:
-            print('[HTTPayer] Attempting to load wallet from private key')
             # Try to detect wallet type from private key
             wallet_detected = False
 
@@ -104,18 +136,31 @@ class HTTPayerClient:
 
             # If EVM failed, try Solana
             if not wallet_detected:
-                print('[HTTPayer] Attempting to load Solana keypair')
                 solana_errors = []
                 
-                # Try base58 first (standard Solana format)
+                # Try JSON array format first (solana-keygen default format)
                 try:
-                    self.solana_keypair = create_signer_from_base58(private_key)
-                    self.account_address = str(self.solana_keypair.pubkey())
-                    self.network_type = "solana"
-                    wallet_detected = True
-                    print(f'[HTTPayer] Successfully loaded Solana keypair from base58')
+                    import json
+                    keypair_bytes = json.loads(private_key)
+                    if isinstance(keypair_bytes, list) and len(keypair_bytes) == 64:
+                        # Convert to hex string (first 32 bytes are the private key)
+                        hex_key = bytes(keypair_bytes[:32]).hex()
+                        self.solana_keypair = create_signer_from_hex(hex_key)
+                        self.account_address = str(self.solana_keypair.pubkey())
+                        self.network_type = "solana"
+                        wallet_detected = True
                 except Exception as e:
-                    solana_errors.append(f"base58: {e}")
+                    solana_errors.append(f"json_array: {e}")
+                
+                # Try base58 format (standard Solana format)
+                if not wallet_detected:
+                    try:
+                        self.solana_keypair = create_signer_from_base58(private_key)
+                        self.account_address = str(self.solana_keypair.pubkey())
+                        self.network_type = "solana"
+                        wallet_detected = True
+                    except Exception as e:
+                        solana_errors.append(f"base58: {e}")
                     
                 # If base58 failed, try hex format
                 if not wallet_detected:
@@ -124,19 +169,12 @@ class HTTPayerClient:
                         self.account_address = str(self.solana_keypair.pubkey())
                         self.network_type = "solana"
                         wallet_detected = True
-                        print(f'[HTTPayer] Successfully loaded Solana keypair from hex')
                     except Exception as e:
                         solana_errors.append(f"hex: {e}")
-                
-                if not wallet_detected and solana_errors:
-                    print(f"[HTTPayer] Solana key detection failed:")
-                    for err in solana_errors:
-                        print(f"  - {err}")
-
 
             if not wallet_detected:
                 raise ValueError(
-                    "Invalid private key: not a valid EVM (hex) or Solana (base58/hex) private key"
+                    "Invalid private key: not a valid EVM (hex) or Solana (base58/hex/JSON array) private key"
                 )
 
             self.mode = "relay"
@@ -191,14 +229,12 @@ class HTTPayerClient:
         # Validate network type compatibility
         if self.network and self.network_type:
             self._validate_network_type_compatibility(self.network, "initialization")
-        
-        print(f'[HTTPayer] calling _validate_network with network={self.network}')
 
         self._validate_network(self.network, context="default network (pre-config)")
 
 
     # ------------------------------------------------------------------
-    # Public helpers (proxy-compatible)
+    # Public helpers (relay + proxy mode compatible)
     # ------------------------------------------------------------------
 
     def pay_invoice(
@@ -208,15 +244,61 @@ class HTTPayerClient:
         api_payload: Optional[Dict[str, Any]] = None,
         api_params: Optional[Dict[str, Any]] = None,
         api_headers: Optional[Dict[str, str]] = None,
+        network: Optional[str] = None,
     ) -> requests.Response:
-        return self._call_router(
-            self.pay_url,
-            api_url,
-            api_method,
-            api_payload,
-            api_params,
-            api_headers,
-        )
+        """
+        Execute payment for a 402-protected resource without attempting a direct call first.
+
+        Directly calls the HTTPayer router (proxy mode) or relay endpoint (relay mode)
+        to pay the invoice and retrieve the protected resource.
+
+        Args:
+            api_method: HTTP method (GET, POST, PUT, DELETE, etc.).
+            api_url: Target API URL to access.
+            api_payload: JSON payload for POST/PUT requests.
+            api_params: Query parameters to include.
+            api_headers: Custom headers to send with the request.
+            network: Network override for relay mode payments.
+
+        Returns:
+            Response from the target API after successful payment.
+
+        Raises:
+            ValueError: If network is incompatible with wallet type or not supported.
+
+        Examples:
+            >>> client = HTTPayerClient()
+            >>> response = client.pay_invoice("GET", "https://api.example.com/data")
+            >>> print(response.json())
+        """
+        # Validate network override compatibility with wallet type
+        if network and self.network_type:
+            self._validate_network_type_compatibility(network, "pay_invoice network override")
+
+        self._validate_network(network, context="pay_invoice network override")
+
+        # Route based on mode
+        if self.mode == "relay":
+            return self._call_relay(
+                self.relay_url,
+                api_url,
+                api_method,
+                api_payload or {},
+                api_params or {},
+                api_headers or {},
+                self.timeout,
+                network if network is not None else self.network,
+            )
+        else:
+            return self._call_router(
+                self.pay_url,
+                api_url,
+                api_method,
+                api_payload,
+                api_params,
+                api_headers,
+                self.timeout,
+            )
 
     def simulate_invoice(
         self,
@@ -225,17 +307,83 @@ class HTTPayerClient:
         api_payload: Optional[Dict[str, Any]] = None,
         api_params: Optional[Dict[str, Any]] = None,
         api_headers: Optional[Dict[str, str]] = None,
+        network: Optional[str] = None,
     ) -> requests.Response:
-        return self._call_router(
-            self.sim_url,
-            api_url,
-            api_method,
-            api_payload,
-            api_params,
-            api_headers,
-        )
+        """
+        Simulate payment for a 402-protected resource without executing actual payment.
+
+        Returns payment requirements and cost estimation without spending funds.
+        Useful for previewing payment details before committing.
+
+        Args:
+            api_method: HTTP method (GET, POST, PUT, DELETE, etc.).
+            api_url: Target API URL to simulate access.
+            api_payload: JSON payload for POST/PUT requests.
+            api_params: Query parameters to include.
+            api_headers: Custom headers to send with the request.
+            network: Network override for relay mode simulation.
+
+        Returns:
+            Response containing payment requirements and simulation details.
+
+        Raises:
+            ValueError: If network is incompatible with wallet type or not supported.
+
+        Examples:
+            >>> client = HTTPayerClient()
+            >>> sim = client.simulate_invoice("GET", "https://api.example.com/data")
+            >>> print(f"Cost: {sim.json()['relayFeeBreakdown']['totalAmount']}")
+        """
+        # Validate network override compatibility with wallet type
+        if network and self.network_type:
+            self._validate_network_type_compatibility(network, "simulate_invoice network override")
+
+        self._validate_network(network, context="simulate_invoice network override")
+
+        # Route based on mode
+        if self.mode == "relay":
+            return self._call_relay(
+                self.relay_sim_url,
+                api_url,
+                api_method,
+                api_payload or {},
+                api_params or {},
+                api_headers or {},
+                self.timeout,
+                network if network is not None else self.network,
+            )
+        else:
+            return self._call_router(
+                self.sim_url,
+                api_url,
+                api_method,
+                api_payload,
+                api_params,
+                api_headers,
+                self.timeout,
+            )
 
     def get_balance(self, api_key: Optional[str] = None) -> requests.Response:
+        """
+        Get account balance for proxy mode.
+
+        Retrieves the current balance and usage information for the API key account.
+        Only available in proxy mode.
+
+        Args:
+            api_key: Override the default API key. Uses instance api_key if not provided.
+
+        Returns:
+            Dict containing balance information (USDC amount, usage stats, etc.).
+
+        Raises:
+            RuntimeError: If called in relay mode (balance endpoint is proxy-only).
+
+        Examples:
+            >>> client = HTTPayerClient(api_key="your-key")
+            >>> balance = client.get_balance()
+            >>> print(f"Balance: {balance['balance']} Credits")
+        """
         if self.mode != "proxy":
             raise RuntimeError("Balance endpoint only available in proxy mode")
 
@@ -247,6 +395,23 @@ class HTTPayerClient:
         ).json()
 
     def get_relay_limits(self) -> requests.Response:
+        """
+        Get usage limits and quotas for relay mode.
+
+        Retrieves spending limits, daily/monthly quotas, and current usage
+        for the wallet address in relay mode. Only available in relay mode.
+
+        Returns:
+            Dict containing relay limits (daily limit, used amount, remaining, etc.).
+
+        Raises:
+            RuntimeError: If called in proxy mode (relay limits are relay-only).
+
+        Examples:
+            >>> client = HTTPayerClient(private_key="0x...", network="base")
+            >>> limits = client.get_relay_limits()
+            >>> print(f"Daily limit: {limits['dailyLimit']} USDC")
+        """
         if self.mode != "relay":
             raise RuntimeError("Relay limits only available in relay mode")
 
@@ -256,6 +421,17 @@ class HTTPayerClient:
         ).json()
     
     def refresh_config(self) -> None:
+        """
+        Refresh HTTPayer configuration from the server.
+
+        Fetches the latest supported networks, chain types, and router configuration.
+        Useful if supported networks change or you want to re-validate network settings.
+
+        Examples:
+            >>> client = HTTPayerClient()
+            >>> client.refresh_config()
+            >>> print(f"Supported networks: {client.supported_networks}")
+        """
         self._load_config()
 
     # ------------------------------------------------------------------
@@ -271,6 +447,47 @@ class HTTPayerClient:
         network: Optional[str] = None,
         **kwargs,
     ) -> requests.Response:
+        """
+        Unified request interface that handles 402 Payment Required responses automatically.
+
+        First attempts a direct request to the target URL. If it returns 402, automatically
+        handles payment through the appropriate flow (relay or proxy) and returns the resource.
+
+        Args:
+            method: HTTP method (GET, POST, PUT, DELETE, etc.).
+            url: Target API URL to access.
+            simulate: If True, only simulate payment without executing (dry-run). Defaults to False.
+            response_mode: Override response format ("text" or "json"). Uses instance default if not specified.
+            network: Override network for relay mode payments.
+            **kwargs: Additional arguments passed to requests (json, params, headers, timeout, etc.).
+
+        Returns:
+            Response from the target API. If 402 is encountered, returns response after payment.
+
+        Raises:
+            ValueError: If network is incompatible with wallet type or not supported.
+
+        Examples:
+            >>> client = HTTPayerClient()
+
+            >>> # Basic request - auto-handles 402
+            >>> response = client.request("GET", "https://api.example.com/data")
+            >>> print(response.json())
+
+            >>> # Simulate first to check cost
+            >>> sim = client.request("GET", "https://api.example.com/data", simulate=True)
+            >>> print(f"Cost: {sim.json()['relayFeeBreakdown']['totalAmount']}")
+
+            >>> # POST with payload
+            >>> response = client.request(
+            ...     "POST",
+            ...     "https://api.example.com/process",
+            ...     json={"input": "data"}
+            ... )
+
+            >>> # Override network for this request
+            >>> response = client.request("GET", url, network="solana-devnet")
+        """
         # Validate network override compatibility with wallet type
         if network and self.network_type:
             self._validate_network_type_compatibility(network, "request override")
@@ -297,7 +514,6 @@ class HTTPayerClient:
             and self.network_type == "solana"
             and self.solana_keypair
         ):
-            print('[HTTPayer] Detected Solana wallet for direct payment path')
             effective_network = network if network is not None else self.network
             if effective_network:
                 # Check if target API accepts our Solana network
@@ -384,6 +600,43 @@ class HTTPayerClient:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _retry_payment_request(
+        self,
+        request_func,
+        max_retries: int = 5,
+        retry_delay: float = 1,
+    ) -> requests.Response:
+        """
+        Retry a request if it gets 402 Payment Required.
+
+        The first 402 triggers the payment, subsequent requests should succeed.
+
+        Args:
+            request_func: Callable that returns a requests.Response
+            max_retries: Maximum number of retry attempts
+            retry_delay: Delay in seconds between retries
+
+        Returns:
+            Response from the request (may be 402 if all retries exhausted)
+        """
+        response = None
+        for attempt in range(max_retries):
+            response = request_func()
+
+            if response.status_code == 402:
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    # Return the 402 response instead of raising exception
+                    # This allows caller to see the actual error details
+                    return response
+
+            # Success or other error
+            return response
+
+        return response
+
     def _call_router(
         self,
         endpoint: str,
@@ -447,12 +700,22 @@ class HTTPayerClient:
         if network:
             data["network"] = network
 
-        # Use x402_session for both EVM and Solana
-        resp = self.x402_session.post(
-            endpoint,
-            json=data,
-            timeout=effective_timeout,
-        )
+        # Only use retry logic for EVM networks
+        if self.network_type == "evm":
+            resp = self._retry_payment_request(
+                lambda: self.x402_session.post(
+                    endpoint,
+                    json=data,
+                    timeout=effective_timeout,
+                )
+            )
+        else:
+            # Solana: no retry logic
+            resp = self.x402_session.post(
+                endpoint,
+                json=data,
+                timeout=effective_timeout,
+            )
 
         if resp.status_code == 202:
             webhook = resp.json().get("webhook_url")
@@ -503,8 +766,6 @@ class HTTPayerClient:
                 return
 
             self.config = resp.json()
-            import json
-            print(f'[HTTPayer] Loaded config: {json.dumps(self.config, indent=2)}')
             networks = (
                 self.config
                 .get("networks", {})
@@ -543,13 +804,9 @@ class HTTPayerClient:
         """
         if not network or not self.network_type:
             return
-        
-        print(f"[HTTPayer] Validating network '{network}' for wallet type '{self.network_type}'")
 
         # Get chainType from config
         network_chain_type = self.network_chain_types.get(network)
-
-        print(f"[HTTPayer] Network chainType: {network_chain_type}")
 
         # If we don't have config yet, skip validation (will validate after config loads)
         if not network_chain_type:
@@ -579,12 +836,8 @@ class HTTPayerClient:
             )
 
     def _validate_network(self, network: Optional[str], context: str = "") -> None:
-        print(f'[HTTPayer] _validate_network called with network={network} context={context} supported_networks={self.supported_networks}')
         if not network or not self.supported_networks:
             return
-        
-        print(f'[HTTPayer] Validating network: {network}')
-        print(f'[HTTPayer] Supported networks: {self.supported_networks}')
 
         if network not in self.supported_networks:
             msg = (
@@ -593,8 +846,6 @@ class HTTPayerClient:
             )
             if self.strict_networks:
                 raise ValueError(msg)
-            else:
-                print(f"[HTTPayer] Warning: {msg}")
 
     # def _extract_accept_networks(self, resp) -> list[str]:
     #     try:
@@ -687,8 +938,21 @@ class HTTPayerClient:
                     custom_rpc_url=None,  # Use default RPC
                 )
 
-            # Run async operation
-            payment_header = asyncio.run(_create_header())
+            # Run async operation (handle both Jupyter and regular environments)
+            try:
+                # Try to get existing event loop (Jupyter notebooks)
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Jupyter/IPython environment - use nest_asyncio
+                    import nest_asyncio
+                    nest_asyncio.apply()
+                    payment_header = asyncio.run(_create_header())
+                else:
+                    # Event loop exists but not running
+                    payment_header = loop.run_until_complete(_create_header())
+            except RuntimeError:
+                # No event loop exists - create one (standard Python)
+                payment_header = asyncio.run(_create_header())
 
             # Make request with payment header
             headers = kwargs.get("headers", {}).copy()
@@ -696,7 +960,7 @@ class HTTPayerClient:
 
             kwargs["headers"] = headers
 
-            # Execute payment request
+            # Execute payment request (no retry for Solana)
             return self.session.request(
                 method,
                 url,
@@ -729,11 +993,13 @@ class HTTPayerClient:
                 f"effective network '{effective_network}'"
             )
 
-        # Delegate to x402 client — it will re-read the accepts internally
-        return self.x402_session.request(
-            method=method,
-            url=url,
-            **kwargs,
+        # Delegate to x402 client with retry logic
+        return self._retry_payment_request(
+            lambda: self.x402_session.request(
+                method=method,
+                url=url,
+                **kwargs,
+            )
         )
 
 

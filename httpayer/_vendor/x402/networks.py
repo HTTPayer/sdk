@@ -1,0 +1,13 @@
+from typing import Literal
+
+
+SupportedNetworks = Literal["base", "base-sepolia", "avalanche-fuji", "avalanche", "skale-base-sepolia", "skale-base"]
+
+EVM_NETWORK_TO_CHAIN_ID = {
+    "base-sepolia": 84532,
+    "base": 8453,
+    "avalanche-fuji": 43113,
+    "avalanche": 43114,
+    "skale-base-sepolia": 324705682,
+    "skale-base": 1187947933
+}

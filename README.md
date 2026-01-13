@@ -1,20 +1,42 @@
 # HTTPayer – Python SDK
 
-**HTTPayer** is a lightweight Python SDK for accessing APIs protected by [`402 Payment Required`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402) responses using the emerging [x402 protocol](https://github.com/coinbase/x402).
+[![Documentation](https://img.shields.io/badge/docs-httpayer.com-0D9373)](https://docs.httpayer.com)
 
-It integrates with the **HTTPayer Router** to automatically fulfill off-chain payments (e.g. USDC / stablecoins via [EIP-3009](https://eips.ethereum.org/EIPS/eip-3009)), enabling pay-per-use APIs and metered endpoints.
+**HTTPayer** is a lightweight Python SDK for accessing APIs protected by [`402 Payment Required`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402) responses using the [x402 protocol](https://github.com/coinbase/x402).
+
+The SDK supports two access patterns for handling 402-protected resources:
+
+## Access Patterns
+
+### Proxy Mode (`/proxy`) – Account-Based Abstraction
+
+- Uses API keys for authentication
+- Abstracts on-chain payments from the client
+- Credits deducted only if HTTPayer is charged by the API
+- Ideal for Web2 and server-side integrations
+- No wallet or private key management required
+
+### Relay Mode (`/relay`) – x402-Native Access
+
+- Directly implements the x402 Protocol
+- Uses payment headers for authorization
+- No API key required – self-custodial payments
+- Supports cross-chain access (pay on Base, access Solana APIs)
+- Privacy-preserving routing via HTTPayer relay (when `privacy_mode=True`)
+- Direct x402 payments to API providers (when `privacy_mode=False`)
+- Automatic refunds if payment is not executed by target API
 
 ---
 
 ## Features
 
-- Auto-handles 402 payment flows through the hosted HTTPayer router
-- Supports `response_mode="text"` (default) or `"json"` for structured proxy results
-- Built-in polling for asynchronous payment completions (`202 + webhook`)
-- Optional dry-run simulation (`simulate=True` or `simulate_invoice`)
-- API key + router configuration via environment or arguments
-- Compatible with Base Sepolia, Avalanche Fuji, and other EVM testnets
-- Flask `X402Gate` decorator for securing your own 402-protected endpoints
+- Auto-handles 402 payment flows
+- Dual access patterns: Proxy (API key) or Relay (private key)
+- Cross-chain payments between EVM and Solana
+- Privacy mode for anonymized payments via HTTPayer relay
+- Dry-run simulation (`simulate=True`)
+- Compatible with Base, Base Sepolia, SKALE Base, SKALE Base Sepolia, Solana, Solana Devnet
+- Response modes: `"text"` (unwrapped) or `"json"` (wrapped)
 
 ---
 
@@ -24,110 +46,108 @@ It integrates with the **HTTPayer Router** to automatically fulfill off-chain pa
 pip install httpayer
 ```
 
-or with demo dependencies (Flask, CCIP examples):
-
-```bash
-pip install httpayer[demo]
-```
+For complete API reference and guides, visit **[docs.httpayer.com](https://docs.httpayer.com)**
 
 ---
 
 ## Environment Setup
 
-Copy `.env.sample` → `.env` and configure your API key and network:
+Copy `.env.sample` → `.env` and configure your API key and/or Private Key:
 
 ```env
 HTTPAYER_API_KEY=your-api-key
-```
-
-For testing the `X402Gate` decorator or local demos:
-
-```env
-NETWORK=base
-FACILITATOR_URL=https://x402.org
-RPC_GATEWAY=https://your-gateway.example
-PAY_TO_ADDRESS=0xYourReceivingAddress
+EVM_PRIVATE_KEY=your-private-key
+SOLANA_PRIVATE_KEY=your-private-key
+SOLANA_KEYPAIR=your-keypair
 ```
 
 ---
 
-## Usage
+## Quick Start
 
-### 1. Programmatic Client
+### Proxy Mode (API Key)
 
 ```python
 from httpayer import HTTPayerClient
 
-client = HTTPayerClient(response_mode="json")
+# Initialize with API key (from HTTPAYER_API_KEY env var)
+client = HTTPayerClient()
 
-# auto-handles 402 Payment Required
-resp = client.request("GET", "https://x402.org/protected")
+# Auto-handles 402 Payment Required - credits deducted on success
+response = client.request("GET", "https://api.example.com/protected")
 
-print(resp.status_code)   # 200
-print(resp.json())        # resource data
+print(response.status_code)  # 200
+print(response.json())       # resource data
 ```
 
-#### Manual Payment or Simulation
+### Relay Mode (Private Key)
 
 ```python
-# simulate required payment (dry-run)
-sim = client.simulate_invoice("GET", "https://x402.org/protected")
+import os
+from httpayer import HTTPayerClient
 
-# pay actual invoice via router
-paid = client.pay_invoice("GET", "https://x402.org/protected")
-```
-
-If the router returns `202 Accepted`, the client will automatically poll the provided `webhook_url` until completion.
-
----
-
-### 2. Flask Authorization – `X402Gate`
-
-Protect your own Web2 endpoints with tokenized payment headers:
-
-```python
-from httpayer.gate import X402Gate
-from flask import Flask, jsonify, make_response
-
-gate = X402Gate(
-    pay_to="0xYourReceivingAddress",
-    network="base-sepolia",
-    asset_address="0xTokenAddress",
-    max_amount=1000,
-    asset_name="USD Coin",
-    asset_version="2",
-    facilitator_url="https://x402.org",
+# Initialize with EVM private key
+client = HTTPayerClient(
+    private_key=os.getenv("EVM_PRIVATE_KEY"),
+    network="base"  # Payment network
 )
 
-app = Flask(__name__)
+# Auto-handles 402 - self-custodial payment from your wallet
+response = client.request("GET", "https://api.example.com/protected")
 
-@app.route("/weather")
-@gate.gate
-def weather():
-    return make_response(jsonify({"weather": "sunny", "temp": 75}))
+print(response.status_code)  # 200
+print(response.json())       # resource data
 ```
 
-Each route can define its own `X402Gate` instance with unique token or chain parameters.
+### Cross-Chain Example
 
----
+```python
+# Pay on Solana, access API requiring Base payments
+client = HTTPayerClient(
+    private_key=os.getenv("SOLANA_PRIVATE_KEY"),
+    network="solana-mainnet-beta"
+)
+
+# HTTPayer relay handles cross-chain conversion
+response = client.request("GET", "https://base-api.example.com/data")
+```
+
+### Simulation (Dry-Run)
+
+```python
+# Preview payment cost without executing
+sim = client.request("GET", "https://api.example.com/protected", simulate=True)
+print(sim.json())  # Shows payment requirements and cost
+
+# Then execute actual payment
+response = client.request("GET", "https://api.example.com/protected")
+```
 
 ## Examples
 
-| File             | Description                                       |
-| ---------------- | ------------------------------------------------- |
-| `tests/test1.py` | Programmatic 402 requests using `HTTPayerClient`  |
-| `tests/test2.py` | Flask Weather API protected with `X402Gate`       |
-| `tests/test3.py` | Explicit `simulate_invoice` / `pay_invoice` usage |
-| `tests/test4.py` | Raw JSON return (`response_mode='json'`)          |
+See the [`examples/`](./examples) directory for copy-paste ready code:
 
-Run with:
+### Proxy Mode
+
+- `examples/proxy/basic_request.py` - Simple GET request with auto-payment
+- `examples/proxy/simulate_then_pay.py` - Preview cost before payment
+- `examples/proxy/check_balance.py` - Check account balance
+
+### Relay Mode
+
+- `examples/relay/evm_payment.py` - Self-custodial payment with EVM wallet
+- `examples/relay/solana_payment.py` - Self-custodial payment with Solana wallet
+- `examples/relay/check_limits.py` - Check relay usage limits
+
+Run any example:
 
 ```bash
-python tests/test1.py
+python examples/proxy/basic_request.py
+python examples/relay/evm_payment.py
 ```
 
-> Local endpoints cannot be paid through the hosted router —
-> for local testing, use the [Coinbase x402 SDKs](https://github.com/coinbase/x402).
+> **Note:** Local endpoints cannot be paid through the hosted router.
+> For local testing, use the [Coinbase x402 SDKs](https://github.com/coinbase/x402).
 
 ---
 
@@ -135,14 +155,23 @@ python tests/test1.py
 
 ```
 httpayer/
-├── client.py        # HTTPayerClient – main SDK client
-├── gate.py          # X402Gate – Flask decorator & helpers
+├── client.py              # HTTPayerClient – main SDK client
+├── x402_solana/           # Solana x402 implementation
+examples/
+├── proxy/                 # Proxy mode examples (API key)
+│   ├── basic_request.py
+│   ├── simulate_then_pay.py
+│   └── check_balance.py
+├── relay/                 # Relay mode examples (private key)
+│   ├── evm_payment.py
+│   ├── solana_payment.py
+│   └── check_limits.py
 tests/
-├── test1.py         # Programmatic example
-├── test2.py         # Flask demo server
-├── test3.py         # Explicit pay/simulate example
-├── test4.py         # Raw JSON example
-.env.sample          # Environment template
+├── proxy/                 # Proxy mode tests
+├── relay/                 # Relay mode tests
+├── unit/                  # Unit tests (no credentials needed)
+└── conftest.py            # Shared pytest fixtures
+.env.sample                # Environment template
 ```
 
 ---

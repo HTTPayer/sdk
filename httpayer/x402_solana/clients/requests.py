@@ -159,9 +159,19 @@ class X402SolanaSession:
                     payment_requirements=requirements,
                     custom_rpc_url=None,
                 )
-            
-            # Run async operation
-            payment_header = asyncio.run(_create_header())
+
+            # Run async operation - handle both Jupyter notebooks and regular Python
+            try:
+                # Check if there's already a running event loop (e.g., in Jupyter)
+                loop = asyncio.get_running_loop()
+                # If we get here, there's a running loop, so we need to run in a thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _create_header())
+                    payment_header = future.result()
+            except RuntimeError:
+                # No running loop, safe to use asyncio.run()
+                payment_header = asyncio.run(_create_header())
             
             # Retry request with payment header
             headers = kwargs.get("headers", {}).copy()
