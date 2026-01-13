@@ -189,15 +189,30 @@ def settle_exact(
             sig_obj["s"],
         )
 
+        # First estimate gas
+        try:
+            gas_estimate = fn.estimate_gas({"from": signer.address})
+            gas_limit = int(gas_estimate * 1.2)  # Add 20% buffer
+        except Exception as gas_err:
+            print(f"[SETTLE] Gas estimation failed: {gas_err}")
+            # Use a reasonable default gas limit for transferWithAuthorization
+            gas_limit = 100000
+
         tx = fn.build_transaction({
             "from": signer.address,
             "nonce": w3.eth.get_transaction_count(signer.address),
+            "gas": gas_limit,
             "gasPrice": w3.eth.gas_price,
         })
 
+        print(f"[SETTLE] Built tx with gas: {gas_limit}, gasPrice: {tx['gasPrice']}")
+        print(f"[SETTLE] Estimated cost: {(gas_limit * tx['gasPrice']) / 1e18} ETH")
+
         signed = signer.sign_transaction(tx)
         tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+        print(f"[SETTLE] Transaction sent: {tx_hash.hex()}")
         return SettleResponse(True, tx_hash.hex(), req.network, payer_addr)
 
     except Exception as exc:
+        print(f"[SETTLE] Settlement failed: {type(exc).__name__}: {str(exc)}")
         return SettleResponse(False, "", req.network, payer_addr, str(exc))

@@ -8,3 +8,8 @@ build/
 uv
 uv.lock
 **notes.txt
+.claude/
+MANIFEST.in
+.pytest_cache/
+scripts/
+docs/
