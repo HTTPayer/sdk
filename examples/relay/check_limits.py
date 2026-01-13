@@ -7,7 +7,7 @@ from httpayer import HTTPayerClient
 # EVM example
 client = HTTPayerClient(
     private_key=os.getenv("EVM_PRIVATE_KEY"),
-    network="skale-base"
+    network="base"
 )
 
 limits = client.get_relay_limits()

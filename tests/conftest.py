@@ -60,7 +60,7 @@ def evm_relay_client():
         pytest.skip("EVM_PRIVATE_KEY not set")
     return HTTPayerClient(
         private_key=private_key,
-        network="skale-base"
+        network="base"
     )
 
 
