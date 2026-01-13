@@ -1,10 +1,7 @@
 """
-Copyright (c) 2025 HTTPayer, Inc. All rights reserved.
-Licensed under the HTTPayer SDK License – see LICENSE.txt.
+Copyright (c) 2026 HTTPayer, Inc. All rights reserved.
+Licensed under the HTTPayer SDK License – see LICENSE.md.
 """
-
-# Ideas; instead of importing network constants locally,
-# we call httpayer api for supported networks.
 
 import os
 import time

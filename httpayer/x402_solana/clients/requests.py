@@ -1,4 +1,9 @@
 """
+Copyright (c) 2026 HTTPayer, Inc. All rights reserved.
+Licensed under the HTTPayer SDK License – see LICENSE.md.
+"""
+
+"""
 Solana x402 HTTP client with automatic request signing for relay mode
 """
 

@@ -1,4 +1,9 @@
 """
+Copyright (c) 2026 HTTPayer, Inc. All rights reserved.
+Licensed under the HTTPayer SDK License – see LICENSE.md.
+"""
+
+"""
 Solana wallet and signer utilities for x402
 """
 
