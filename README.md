@@ -35,7 +35,7 @@ The SDK supports two access patterns for handling 402-protected resources:
 - Cross-chain payments between EVM and Solana
 - Privacy mode for anonymized payments via HTTPayer relay
 - Dry-run simulation (`simulate=True`)
-- Compatible with Base, Base Sepolia, SKALE Base, SKALE Base Sepolia, Solana, Solana Devnet
+- Compatible with Base, Base Sepolia, SKALE Base, SKALE Base Sepolia, Solana, and Solana Devnet
 - Response modes: `"text"` (unwrapped) or `"json"` (wrapped)
 
 ---
@@ -185,8 +185,26 @@ tests/
 
 ---
 
+## Attribution
+
+This SDK builds upon and includes modified versions of open source software:
+
+- **[x402 Protocol by Coinbase](https://github.com/coinbase/x402)** - Apache-2.0 License
+  Core x402 protocol implementation vendored in `httpayer/_vendor/x402/`
+
+- **[x402python by OrbytLabz](https://github.com/OrbytLabz/x402python)** - Apache-2.0 License
+  Referenced implementation for Solana x402 protocol support
+
+HTTPayer provides its own Solana x402 implementation (`httpayer/x402_solana/`) compatible with the x402 protocol specification.
+
+For detailed attribution information, see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+
+---
+
 ## License
 
-This SDK is proprietary and licensed under the HTTPayer SDK License.  
-Cloning, redistribution, or republishing is strictly prohibited.  
+This SDK is proprietary and licensed under the HTTPayer SDK License.
+Cloning, redistribution, or republishing is strictly prohibited.
 See the [LICENSE.md](./LICENSE.md) file for details.
+
+**Third-party dependencies** are licensed under their respective open source licenses (Apache-2.0).

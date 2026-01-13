@@ -1,4 +1,9 @@
 """
+Copyright (c) 2026 HTTPayer, Inc. All rights reserved.
+Licensed under the HTTPayer SDK License – see LICENSE.md.
+"""
+
+"""
 RPC client utilities for connecting to Solana networks
 """
 

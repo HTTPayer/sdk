@@ -13,3 +13,4 @@ MANIFEST.in
 .pytest_cache/
 scripts/
 docs/
+scripts/generate_sdk_docs.py
