@@ -63,7 +63,7 @@ class HTTPayerClient:
             api_key: API key for proxy mode. Defaults to HTTPAYER_API_KEY env var.
             private_key: Private key for relay mode. Supports EVM (hex), Solana (base58/hex/JSON array).
             account: Pre-configured EVM Account object for relay mode.
-            network: Default network for relay payments (e.g., "base", "solana-mainnet-beta").
+            network: Default network for relay payments (e.g., "base", "solana"). Auto-detects to "base" for EVM wallets and "solana" for Solana wallets if not provided.
             timeout: Request timeout in seconds. Defaults to 600 (10 minutes).
             use_session: Use requests.Session for connection pooling. Defaults to True.
             strict_networks: Raise error for unsupported networks. Defaults to True.
@@ -78,11 +78,14 @@ class HTTPayerClient:
             >>> # Proxy mode (API key)
             >>> client = HTTPayerClient(api_key="your-api-key")
 
-            >>> # Relay mode (EVM private key)
-            >>> client = HTTPayerClient(private_key="0x...", network="base")
+            >>> # Relay mode (EVM private key) - auto-detects network="base"
+            >>> client = HTTPayerClient(private_key="0x...")
 
-            >>> # Relay mode (Solana private key)
-            >>> client = HTTPayerClient(private_key="base58-key", network="solana-mainnet-beta")
+            >>> # Relay mode (Solana private key) - auto-detects network="solana"
+            >>> client = HTTPayerClient(private_key="base58-key")
+
+            >>> # Relay mode with explicit network override
+            >>> client = HTTPayerClient(private_key="0x...", network="base-sepolia")
         """
         if response_mode not in ("json", "text"):
             raise ValueError("response_mode must be 'json' or 'text'")
@@ -116,6 +119,10 @@ class HTTPayerClient:
             self.account_address = Web3.to_checksum_address(account.address)
             self.network_type = "evm"
             self.mode = "relay"
+
+            # Set default network if not provided
+            if not self.network:
+                self.network = "base"
         elif private_key:
             # Try to detect wallet type from private key
             wallet_detected = False
@@ -175,6 +182,13 @@ class HTTPayerClient:
                 )
 
             self.mode = "relay"
+
+            # Set default network based on detected wallet type if not provided
+            if not self.network:
+                if self.network_type == "evm":
+                    self.network = "base"
+                elif self.network_type == "solana":
+                    self.network = "solana"
         else:
             # No wallet - proxy mode
             self.mode = "proxy"
@@ -456,7 +470,13 @@ class HTTPayerClient:
             simulate: If True, only simulate payment without executing (dry-run). Defaults to False.
             response_mode: Override response format ("text" or "json"). Uses instance default if not specified.
             network: Override network for relay mode payments.
-            **kwargs: Additional arguments passed to requests (json, params, headers, timeout, etc.).
+            **kwargs: Additional request arguments. Common options:
+                - json: JSON payload (forwarded through HTTPayer payment flow)
+                - params: Query parameters (forwarded through HTTPayer)
+                - headers: Custom headers (forwarded through HTTPayer)
+                - timeout: Request timeout override (forwarded through HTTPayer)
+                - Other kwargs (data, files, auth, cookies, etc.) are only used for the
+                  initial direct request attempt and NOT forwarded through HTTPayer payment flow.
 
         Returns:
             Response from the target API. If 402 is encountered, returns response after payment.
@@ -904,8 +924,8 @@ class HTTPayerClient:
             Response from server after payment
         """
         import asyncio
-        from x402_solana.types import PaymentRequirements
-        from x402_solana.schemes.exact_svm.client import create_payment_header
+        from httpayer.x402_solana.types import PaymentRequirements
+        from httpayer.x402_solana.schemes.exact_svm.client import create_payment_header
 
         try:
             # Parse payment requirements from 402 response
