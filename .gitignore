@@ -8,9 +8,9 @@ build/
 uv
 uv.lock
 **notes.txt
-.claude/
 MANIFEST.in
 .pytest_cache/
 scripts/
 docs/
 scripts/generate_sdk_docs.py
+.venv39/

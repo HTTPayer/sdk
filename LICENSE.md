@@ -22,14 +22,14 @@ You may **not**:
 - Copy, fork, or redistribute this software or any derivative work.
 - Use the SDK to build, host, or offer a competing service.
 - Modify, reverse engineer, or decompile the SDK, except as required for legitimate integration purposes.
-- Re-host, rebrand, or re-publish this SDK (including on GitHub, npm, PyPI, or any equivalent platform) without prior written consent from HTTPayer Inc. or ChainSettle Inc.
+- Re-host, rebrand, or re-publish this SDK (including on GitHub, npm, PyPI, or any equivalent platform) without prior written consent from HTTPayer Inc.
 
 ---
 
 ## 3. Ownership and Intellectual Property
 
 This license does not grant ownership rights or any implied license.  
-HTTPayer Inc. and its parent company, ChainSettle Inc., retain all **intellectual property rights** in this software, including source code, binaries, documentation, and related assets.
+HTTPayer Inc. retains all **intellectual property rights** in this software, including source code, binaries, documentation, and related assets.
 
 ---
 
@@ -46,4 +46,4 @@ For commercial licensing, redistribution rights, or enterprise use, please conta
 
 ---
 
-© 2025 HTTPayer Inc., under ChainSettle Inc. All Rights Reserved.
+© 2026 HTTPayer Inc. All Rights Reserved.

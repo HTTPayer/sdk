@@ -18,6 +18,16 @@ def test_api_url():
     """Standard test API URL that returns 402 Payment Required"""
     return "https://api.itsgloria.ai/news?feed_categories=ai,crypto"
 
+@pytest.fixture
+def test_evm_api_url():
+    """Standard test API URL that returns 402 Payment Required"""
+    return "https://api.itsgloria.ai/news?feed_categories=ai,crypto"
+
+@pytest.fixture
+def test_solana_api_url():
+    """Standard test API URL that returns 402 Payment Required on Solana"""
+    return "https://biznews.x402.bot/news"
+
 
 # ============================================================================
 # Skip Conditions (for missing credentials)

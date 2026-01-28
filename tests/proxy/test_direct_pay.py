@@ -10,7 +10,7 @@ import pytest
 def test_explicit_simulate_invoice(proxy_client, test_api_url):
     """Test explicit simulate_invoice() method"""
     response = proxy_client.simulate_invoice("GET", test_api_url)
-    assert response.status_code == 200
+    assert response.status_code == 200 
 
 
 @pytest.mark.proxy

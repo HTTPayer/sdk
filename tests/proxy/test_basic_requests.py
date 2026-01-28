@@ -11,7 +11,7 @@ def test_simulate_then_pay(proxy_client, test_api_url):
     """Test simulating payment first, then executing actual payment"""
     # Simulate to get payment requirements
     sim_response = proxy_client.request("GET", test_api_url, simulate=True)
-    assert sim_response.status_code == 200
+    assert sim_response.status_code == 200  
 
     # Now execute actual payment
     response = proxy_client.request("GET", test_api_url)
